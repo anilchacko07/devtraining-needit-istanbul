@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update table="sp_widget">
+    <sp_widget action="INSERT_OR_UPDATE">
+        <client_script><![CDATA[function ($scope, spUtil, $rootScope, $location) {
+	var bc = [{label: $scope.page.title, url: '?id=' + $scope.data.sc_catalog_page}];
+	if ($scope.data.category)
+		bc[bc.length] = {label: $scope.data.category, url: '#'};
+	
+	$rootScope.$broadcast('sp.update.breadcrumbs', bc);	
+	spUtil.setSearchPage('sc');
+
+	/*=============== Begin link handling ===============*/
+	$scope.onClick = function($event, item) {
+		var lp = getLinkParts(item);
+		if (typeof lp == "string")
+			return; // can't intercept/redirect external content item
+
+		$event.stopPropagation();
+		$event.preventDefault();
+		var evt = {item: item, search: lp};
+
+		// This will let a wrapper widget intercept and redirect somewhere else
+		$scope.$emit($scope.options.click_event_name, evt);
+	};
+	
+	function getLinkParts(item) {
+		if (item.sys_class_name == 'sc_cat_item_content' && item.content_type == 'external')
+			return item.url;
+		
+		return {id: item.page, sys_id: item.sys_id};
+	}
+	
+	$scope.getItemHREF = function(item) {
+		var lp = getLinkParts(item);
+		if (typeof lp == "string")
+			return lp;
+		
+		return "?id=" + lp.id + "&sys_id=" + lp.sys_id;
+	}
+	
+	var unregister = $rootScope.$on($scope.options.click_event_name, function($event, o) {
+		if ("url" in o)
+			$location.href = o.url;
+		else
+			$location.search(o.search);
+	});
+	
+	$scope.$on("$destroy", function() { 
+		unregister(); 
+	});
+	/*=============== End link handling ===============*/
+}]]></client_script>
+        <controller_as>c</controller_as>
+        <css/>
+        <data_table>sp_instance</data_table>
+        <demo_data/>
+        <description/>
+        <docs/>
+        <field_list/>
+        <has_preview>false</has_preview>
+        <id/>
+        <internal>false</internal>
+        <link/>
+        <name>Copy of SC Category Page</name>
+        <option_schema>[{"name":"click_event_name","default_value":"$sp.cat_item_list.click","label":"Click event name","type":"string"}]</option_schema>
+        <public>false</public>
+        <roles>snc_external,snc_internal</roles>
+        <script><![CDATA[(function() {
+	data.category_id = $sp.getParameter("sys_id");
+	data.showPrices = $sp.showCatalogPrices();
+	if (options && options.sys_id)
+		data.category_id = options.sys_id;
+
+	data.sc_catalog_page = $sp.getDisplayValue("sc_catalog_page") || "sc_home";
+	// Does user have permission to see this category?
+	if (!$sp.canReadRecord("sc_category", data.category_id)) {
+		data.error = "You do not have permission to see this category";
+		return;
+	} 
+
+	var cat = new GlideRecord('sc_category');
+	cat.get(data.category_id);
+	data.category = cat.getDisplayValue('title');
+	var items = data.items = [];
+	var sc = new GlideRecord('sc_cat_item_category');
+	if (data.category_id) 
+		sc.addQuery('sc_category', data.category_id);
+
+	sc.addQuery('sc_cat_item.active',true);
+	sc.addQuery('sc_cat_item.sys_class_name', 'NOT IN', 'sc_cat_item_wizard');
+	sc.orderBy('sc_cat_item.order');
+	sc.orderBy('sc_cat_item.name');
+	sc.query();
+	while (sc.next()) {
+		// Does user have permission to see this item?
+		if (!$sp.canReadRecord("sc_cat_item", sc.sc_cat_item.sys_id.getDisplayValue()))
+			continue;
+
+		var item = {};
+		var gr = new GlideRecord('sc_cat_item');
+		gr.get(sc.sc_cat_item);
+		gr = GlideScriptRecordUtil.get(gr).getRealRecord();
+		$sp.getRecordDisplayValues(item, gr, 'name,short_description,picture,price,sys_id');
+		item.sys_class_name = sc.sc_cat_item.sys_class_name + "";
+		item.page = 'sc_cat_item';
+		if (item.sys_class_name == 'sc_cat_item_guide')
+			item.page = 'sc_cat_item_guide';
+		else if (item.sys_class_name == 'sc_cat_item_content') {
+			$sp.getRecordValues(item, gr, 'url,content_type,kb_article');
+			if (item.content_type == 'kb') {
+				item.page = 'kb_article';
+				item.sys_id = item.kb_article;
+			} else if (item.content_type == 'literal') {
+				item.page = 'sc_cat_item';
+			} else if (item.content_type == 'external')
+				item.target = '_blank';
+		}
+
+		items.push(item);
+	}
+})()
+]]></script>
+        <servicenow>false</servicenow>
+        <sys_class_name>sp_widget</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2017-07-17 19:15:15</sys_created_on>
+        <sys_customer_update>true</sys_customer_update>
+        <sys_id>07864f0ddb480300249afabdbf9619ee</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>Copy of SC Category Page</sys_name>
+        <sys_package display_value="NeedIt" source="x_58872_needit">6ead8e780f603200cd674f8ce1050ed1</sys_package>
+        <sys_policy/>
+        <sys_replace_on_upgrade>false</sys_replace_on_upgrade>
+        <sys_scope display_value="NeedIt">6ead8e780f603200cd674f8ce1050ed1</sys_scope>
+        <sys_update_name>sp_widget_07864f0ddb480300249afabdbf9619ee</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2017-07-17 19:15:15</sys_updated_on>
+        <template><![CDATA[<div>
+  <h4 ng-if="data.error">{{data.error}}</h4>
+  <div ng-init="spSearch.targetCatalog()">
+    <h4 class="m-t-none">{{data.category}}</h4>
+    <div class="row">      
+      <div class="col-sm-6 col-md-4" ng-if="!data.items.length && !data.error">
+        ${No items in category}
+      </div>
+      <div class="col-sm-6 col-md-4" ng-repeat="item in data.items">
+        <div class="panel panel-{{::options.color}} b">
+          <a target="{{item.target}}" ng-href="{{getItemHREF(item)}}" ng-click="onClick($event, item)" class="panel-body block">
+            <div class="overflow-100">
+              <h4 class="m-t-none m-b-xs">{{item.name}}<span ng-if="item.content_type == 'external'"> ➚</span></h4>
+              <img ng-src="{{item.picture}}" ng-if="item.picture" class="m-r-sm m-b-sm item-image pull-left" />
+              <div class="text-muted item-short-desc">{{item.short_description}}</div>
+            </div>
+          </a>
+          <div class="panel-footer">
+            <a ng-if="item.sys_class_name != 'sc_cat_item_content' || item.content_type == 'kb' || item.content_type == 'literal'" href="?id={{item.page}}&sys_id={{item.sys_id}}" class="pull-left text-muted">${View Details}</a>
+            <a ng-if="item.sys_class_name == 'sc_cat_item_content' && item.content_type == 'external'" href="{{item.url}}" target="_blank" class="pull-left text-muted">${View Details}</a>
+            <span ng-if="data.showPrices && item.price != '$0.00'" class="pull-right item-price font-bold">{{item.price}}</span> &nbsp;
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>]]></template>
+    </sp_widget>
+</record_update>
